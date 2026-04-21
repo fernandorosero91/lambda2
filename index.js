@@ -1,0 +1,80 @@
+const mysql = require('mysql2/promise');
+
+// Configuración de la base de datos (se recomienda usar Variables de Entorno)
+const dbConfig = {
+    host: process.env.DB_HOST || '',
+    user: process.env.DB_USER || '',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || '',
+    connectTimeout: 10000 // 10 segundos de espera máximo
+};
+
+// Crear el pool de conexiones fuera del handler para reutilizarlo
+let pool;
+
+exports.handler = async (event) => {
+    if (!pool) {
+        pool = mysql.createPool(dbConfig);
+    }
+
+    try {
+        // 1. Crear la tabla si no existe
+        const createTableQuery = `
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                tel VARCHAR(20),
+                email VARCHAR(100) UNIQUE,
+                address TEXT
+            );
+        `;
+        await pool.query(createTableQuery);
+
+        // 2. Datos aleatorios para insertar
+        const randomUsers = [
+            ['Juan Perez', '3001234567', 'juan@example.com', 'Calle 10 #20-30'],
+            ['Maria Lopez', '3109876543', 'maria@test.com', 'Av. Siempre Viva 123'],
+            ['Carlos Ruiz', '3204445566', 'cruiz@db.com', 'Carrera 5 #12-45'],
+            ['Ana Garcia', '3157778899', 'ana.g@web.com', 'Transversal 88 #9-10'],
+            ['Luis Castro', '3005550011', 'lcastro@server.com', 'Pasaje 4 #1-2']
+        ];
+
+        // 3. Insertar datos (usamos IGNORE para evitar errores si los emails ya existen)
+        const insertQuery = `
+            INSERT IGNORE INTO users (name, tel, email, address) 
+            VALUES ?
+        `;
+        
+        const [insertResult] = await pool.query(insertQuery, [randomUsers]);
+
+        // 4. Consultar los datos para confirmar
+        const [rows] = await pool.query('SELECT * FROM users');
+        
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                message: "Operación completada",
+                filasInsertadas: insertResult.affectedRows,
+                usuariosActuales: rows
+            }),
+        };
+    } catch (error) {
+        console.error("Error en la operación:", error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ 
+                error: "Error en el servidor", 
+                message: error.message 
+            }),
+        };
+    }
+};
+
+// 1. eliminar base de datos 
+// 2. Lambda -> Quitar la VPC asociada a la funcion Lambda
+// 3. VPC -> quitar la puerta de enlace y luego eliminar
+// 4. Grupos de seguridad -> editar la reglas de entra y salida y quitar la reglas
+// luego eliminar los grupos de seguridad
+// 5. EC2 -> eliminar las interfaces de red
+// 6. VPC -> eliminar las subredes
+// 7. VPC -> Eliminar la VPC
